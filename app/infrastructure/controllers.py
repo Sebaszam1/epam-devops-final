@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from typing import Dict, Any
-from app.application.use_cases import GetUserUseCase, HealthCheckUseCase
-from app.infrastructure.repositories import InMemoryUserRepository, InMemoryHealthRepository
+from application.use_cases import GetUserUseCase, HealthCheckUseCase
+from infrastructure.repositories import InMemoryUserRepository, InMemoryHealthRepository
 
 
 def get_user_repository():
@@ -25,9 +25,6 @@ router = APIRouter()
 
 @router.get("/health", response_model=Dict[str, Any])
 async def health_check(use_case: HealthCheckUseCase = Depends(get_health_use_case)):
-    """
-    Endpoint de healthcheck que retorna el estado de la aplicación
-    """
     return use_case.execute()
 
 

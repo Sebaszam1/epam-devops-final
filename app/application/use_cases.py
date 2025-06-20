@@ -1,6 +1,6 @@
 from typing import Dict, Any
-from app.domain.entities import User, HealthCheck, HealthStatus
-from app.domain.repositories import UserRepository, HealthRepository
+from domain.entities import User, HealthCheck, HealthStatus
+from domain.repositories import UserRepository, HealthRepository
 import datetime
 
 

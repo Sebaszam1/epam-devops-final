@@ -1,6 +1,6 @@
 import datetime
-from app.domain.entities import User, HealthCheck, HealthStatus
-from app.domain.repositories import UserRepository, HealthRepository
+from domain.entities import User, HealthCheck, HealthStatus
+from domain.repositories import UserRepository, HealthRepository
 
 
 class InMemoryUserRepository(UserRepository):

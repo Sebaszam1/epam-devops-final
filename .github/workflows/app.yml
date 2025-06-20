@@ -1,0 +1,181 @@
+name: App Deployment Pipeline
+
+# Only deploy when app code changes on main branch
+on:
+  push:
+    paths:
+      - 'app/**'
+    branches:
+      - main
+
+# Docker registry and AWS region configuration
+env:
+  DOCKER_REPO: sebaszam/epam-devops-app
+  REGION: us-east-1
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      # Install all Python dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r app/requirements.txt
+
+      # Run tests with coverage - pipeline fails if tests fail
+      - name: Run Unit Tests
+        run: |
+          cd app
+          python -m pytest --cov=.
+        continue-on-error: false
+
+      # Login to Docker Hub to push our image
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Build and push the application image to Docker Hub
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t $DOCKER_REPO:latest ./app
+          docker push $DOCKER_REPO:latest
+
+      # Configure AWS CLI to access EKS cluster
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.REGION }}
+
+      # Make sure EKS cluster is ready before deploying
+      - name: Wait for Cluster Readiness
+        env:
+          CLUSTER_NAME: ${{ vars.PROJECT_NAME || 'epam-devops-final' }}-eks
+        run: |
+          echo "🔍 Checking cluster status..."
+          aws eks update-kubeconfig --region ${{ env.REGION }} --name $CLUSTER_NAME
+          
+          echo "⏱️ Waiting for cluster to be fully active..."
+          for i in {1..10}; do
+            CLUSTER_STATUS=$(aws eks describe-cluster --region ${{ env.REGION }} --name $CLUSTER_NAME --query 'cluster.status' --output text)
+            echo "Attempt $i/10: Cluster status = $CLUSTER_STATUS"
+            
+            if [ "$CLUSTER_STATUS" = "ACTIVE" ]; then
+              echo "✅ Cluster is ACTIVE"
+              break
+            fi
+            
+            echo "⏳ Waiting 30 seconds for cluster to become active..."
+            sleep 30
+          done
+          
+          echo "🔍 Checking node readiness..."
+          kubectl get nodes -o wide || echo "❌ Cannot list nodes yet"
+          
+          echo "⏱️ Waiting for nodes to be Ready..."
+          kubectl wait --for=condition=Ready nodes --all --timeout=300s || echo "❌ Nodes not ready within timeout"
+
+      # Test kubectl connectivity to the EKS cluster
+      - name: Configure EKS Access
+        env:
+          CLUSTER_NAME: ${{ vars.PROJECT_NAME || 'epam-devops-final' }}-eks
+        run: |
+          echo "🔧 Configuring EKS access for GitHub Actions user..."
+          
+          # Update kubeconfig
+          aws eks update-kubeconfig --region ${{ env.REGION }} --name $CLUSTER_NAME
+          
+          # Test basic connectivity
+          echo "🔍 Testing cluster connectivity..."
+          kubectl get nodes || echo "❌ Cannot access cluster yet"
+          
+          # The cluster creator should have automatic access via access entries
+          # If this fails, it means there's still an authentication issue
+          echo "✅ EKS access test completed"
+
+      # Install AWS Load Balancer Controller for ingress functionality
+      - name: Install AWS Load Balancer Controller
+        env:
+          CLUSTER_NAME: ${{ vars.PROJECT_NAME || 'epam-devops-final' }}-eks
+          PROJECT_NAME: ${{ vars.PROJECT_NAME || 'epam-devops-final' }}
+        run: |
+          echo "🔍 Checking if AWS Load Balancer Controller is already installed..."
+          if kubectl get deployment -n kube-system aws-load-balancer-controller &>/dev/null; then
+            echo "✅ AWS Load Balancer Controller already exists, skipping installation"
+            exit 0
+          fi
+          
+          echo "📦 Installing Helm..."
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          
+          echo "📋 Adding AWS EKS Charts repository..."
+          helm repo add eks https://aws.github.io/eks-charts
+          helm repo update
+          
+          echo "🚀 Installing AWS Load Balancer Controller..."
+          IAM_ROLE_ARN="arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID || '928558117008' }}:role/${PROJECT_NAME}-aws-load-balancer-controller"
+          
+          helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+            -n kube-system \
+            --set clusterName=$CLUSTER_NAME \
+            --set serviceAccount.create=true \
+            --set serviceAccount.name=aws-load-balancer-controller \
+            --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$IAM_ROLE_ARN \
+            --version 1.6.2 \
+            --wait
+          
+          echo "⏱️ Waiting for AWS Load Balancer Controller to be ready..."
+          kubectl wait --for=condition=available --timeout=300s deployment/aws-load-balancer-controller -n kube-system
+          
+          echo "✅ AWS Load Balancer Controller installed successfully"
+
+      # Deploy the application to Kubernetes with rolling update
+      - name: Deploy Kubernetes Manifests
+        env:
+          CLUSTER_NAME: ${{ vars.PROJECT_NAME || 'epam-devops-final' }}-eks
+        run: |
+          echo "🚀 Deploying application manifests..."
+          kubectl apply -f k8s/configmap.yaml
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/ingress.yaml
+          
+          echo "🔄 Updating deployment with latest image..."
+          kubectl set image deployment/app-deployment app=$DOCKER_REPO:latest
+          
+          echo "🔄 Forcing deployment restart to use new image..."
+          kubectl rollout restart deployment/app-deployment
+          
+          echo "⏱️ Waiting for deployment to be ready..."
+          if ! kubectl rollout status deployment/app-deployment --timeout=300s; then
+            echo "❌ Deployment failed! Gathering debug information..."
+            
+            echo "📊 Pod status:"
+            kubectl get pods -l app=devops-app -o wide
+            
+            echo "📋 Deployment details:"
+            kubectl describe deployment app-deployment
+            
+            echo "📝 Pod logs:"
+            kubectl logs -l app=devops-app --tail=50
+            
+            echo "⚠️ Recent events:"
+            kubectl get events --sort-by=.metadata.creationTimestamp --field-selector involvedObject.kind=Pod | tail -10
+            
+            exit 1
+          fi
+          
+          echo "✅ Deployment successful!"
