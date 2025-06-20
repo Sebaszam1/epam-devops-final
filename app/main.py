@@ -30,7 +30,7 @@ async def health_check():
     logger.info("Health check endpoint accessed")
     return {
         "status": "healthy",
-        "service": "Simple API",
+        "service": "Simple DDD API",
         "version": "1.0.0",
         "environment": os.getenv("ENVIRONMENT", "development")
     }
