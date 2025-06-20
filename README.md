@@ -1,385 +1,319 @@
-# DevOps Final Project - Python FastAPI Application
+# DevOps Final Project: FastAPI on AWS EKS
 
-A Python application developed with FastAPI and Domain Driven Design (DDD) architecture, deployed on AWS EKS using GitOps and Infrastructure as Code.
+## 🎯 What This Project Does
 
-## 📋 Table of Contents
+This project showcases a production-ready FastAPI application deployed on AWS using Kubernetes (EKS), with fully automated CI/CD pipelines. I've built everything from scratch following industry best practices:
 
-- [Architecture](#-architecture)
-- [Setup and Installation](#-setup-and-installation)
-- [CI/CD Pipelines](#-cicd-pipelines)
-- [Project Structure](#-project-structure)
-- [Local Usage](#-local-usage)
-- [Testing](#-testing)
-- [DDD Principles](#-ddd-principles)
+- **Modern Python API** built with FastAPI and Domain-Driven Design
+- **Cloud Infrastructure** managed with Terraform on AWS
+- **Container Orchestration** using Kubernetes (EKS)
+- **Automated Deployments** via GitHub Actions
+- **Production-Ready** health checks
 
-## 🏗️ Architecture
+## 🏗️ Architecture Overview
 
-### Overall System Architecture
+### High-Level System Design
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   GitHub Repo   │    │   GitHub Actions │    │      AWS        │
-│                 │    │                  │    │                 │
-│ ┌─────────────┐ │    │ ┌──────────────┐ │    │ ┌─────────────┐ │
-│ │    App/     │─├────┤→│  App Pipeline │─├────┤→│   EKS       │ │
-│ │  FastAPI    │ │    │ │  - Build      │ │    │ │  Cluster    │ │
-│ │             │ │    │ │  - Test       │ │    │ │             │ │
-│ └─────────────┘ │    │ │  - Deploy     │ │    │ └─────────────┘ │
-│                 │    │ └──────────────┘ │    │                 │
-│ ┌─────────────┐ │    │                  │    │ ┌─────────────┐ │
-│ │   Infra/    │─├────┤┐ ┌──────────────┐│    │ │   VPC       │ │
-│ │ Terraform   │ │    ││ │ Infra Pipeline││    │ │ Load Balancer│ │
-│ │             │ │    │└→│  - Plan       ││    │ │   ELB       │ │
-│ └─────────────┘ │    │  │  - Apply      ││    │ └─────────────┘ │
-└─────────────────┘    │  └──────────────┘│    └─────────────────┘
-                       └──────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                          GitHub Repository                      │
+├─────────────────────────────────────────────────────────────────┤
+│  App Changes                    │  Infrastructure Changes       │
+│      ↓                          │           ↓                   │
+├─────────────────────────────────────────────────────────────────┤
+│                     GitHub Actions (CI/CD)                      │
+│  ┌─────────────────────────────┐  │  ┌─────────────────────────┐│
+│  │        App Pipeline         │  │  │     Infra Pipeline      ││
+│  │ • Test                      │  │  │ • Terraform             ││
+│  │ • Build                     │  │  │ • Plan & Apply          ││
+│  │ • Deploy                    │  │  │ • AWS Resources         ││
+│  └─────────────────────────────┘  │  └─────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+                               ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                        AWS Cloud (us-east-1)                    │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │                    VPC (10.0.0.0/16)                        ││
+│  │  ┌─────────────────┐        ┌─────────────────────────────┐ ││
+│  │  │ Public Subnets  │        │      Private Subnets        │ ││
+│  │  │ • ALB           │   ←→   │ • EKS Worker Nodes          │ ││
+│  │  │ • NAT Gateway   │        │ • FastAPI Pods (2 replicas) │ ││
+│  │  │ • Internet GW   │        │ • Internal Services         │ ││
+│  │  └─────────────────┘        └─────────────────────────────┘ ││
+│  └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Infrastructure Architecture (AWS)
+### Application Architecture (Domain-Driven Design)
 
-- **VPC**: Virtual private cloud with public and private subnets
-- **EKS Cluster**: Managed Kubernetes with nodes in private subnets
-- **Application Load Balancer**: Load balancer for external access
-- **NAT Gateway**: For internet access from private subnets
-- **IAM Roles**: Granular policies for services and workloads
-
-### Application Architecture (DDD)
+I've structured my FastAPI application using DDD principles for maintainability and testability:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     FastAPI Application                     │
+│                    FastAPI Application                      │
 ├─────────────────────────────────────────────────────────────┤
-│  Infrastructure Layer (controllers.py)                     │
-│  ├─ REST API Endpoints                                      │
-│  └─ HTTP Handlers                                           │
+│  🌐 Infrastructure Layer (controllers.py)                   │
+│     • REST API endpoints (/health, /api/v1/*)               │
+│     • HTTP request/response handling                        │
+│     • External interface (web controllers)                  │
 ├─────────────────────────────────────────────────────────────┤
-│  Application Layer (use_cases.py)                          │
-│  ├─ Business Logic Orchestration                           │
-│  └─ Use Cases Implementation                                │
+│  ⚙️  Application Layer (use_cases.py)                       │
+│     • Business logic orchestration                          │
+│     • Use case implementations                              │
+│     • Service coordination                                  │
 ├─────────────────────────────────────────────────────────────┤
-│  Domain Layer (entities.py, repositories.py)               │
-│  ├─ Business Entities                                       │
-│  ├─ Domain Rules                                            │
-│  └─ Repository Interfaces                                   │
+│  🏛️  Domain Layer (entities.py, repositories.py)            │
+│     • Core business entities                                │
+│     • Domain rules and validation                           │
+│     • Repository interfaces (contracts)                     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## ⚙️ Setup and Installation
+## 🚀 Setup Instructions
 
 ### Prerequisites
 
-- **Local Tools:**
-  - Python 3.11+
-  - Docker
-  - kubectl
-  - AWS CLI
-  - Terraform 1.5+
+**Required Accounts:**
+- AWS account with administrative permissions
+- DockerHub account (for container registry)
+- GitHub repository with Actions enabled
 
-- **Cloud Services:**
-  - AWS account with administrative permissions
-  - Docker Hub account
-  - GitHub repository with Actions enabled
+**AWS IAM User Requirements:**
+Your AWS user needs the following permissions:
+- EC2 Full Access (for VPC, subnets, security groups)
+- EKS Full Access (for Kubernetes cluster)
+- IAM Full Access (for roles and policies)
+- ElasticLoadBalancing Full Access (for ALB)
 
-### Environment Variables and Secrets
+### Step 1: Fork and Configure Repository
 
-#### GitHub Secrets (Required)
+1. **Fork this repository** to your GitHub account
+
+2. **Clone your forked repository:**
 ```bash
-AWS_ACCESS_KEY_ID=your_aws_access_key
-AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+git clone https://github.com/Sebaszam1/epam-devops-final.git
+cd epam-devops-final
+```
+
+### Step 2: Configure GitHub Secrets
+
+Add these **required secrets**:
+
+```
+AWS_ACCESS_KEY_ID=your_aws_access_key_here
+AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key_here
 DOCKERHUB_USERNAME=your_dockerhub_username
-DOCKERHUB_TOKEN=your_dockerhub_token
-AWS_ACCOUNT_ID=your_aws_account_id  # Optional, default: 928558117008
+DOCKERHUB_TOKEN=your_dockerhub_access_token
 ```
 
-#### GitHub Variables (Optional)
+### Step 3: Automated Cloud Deployment
+
+Once you've configured the secrets deployment is fully automated:
+
+**🏗️ Deploy Infrastructure First:**
 ```bash
-PROJECT_NAME=epam-devops-final  # Default value
-AWS_REGION=us-east-1           # Default value
+# Make any change to infra/ directory (or create empty commit)
+git commit --allow-empty -m "Deploy infrastructure"
+git push origin main
 ```
 
-### Initial Setup
+**⏱️ Wait for Infrastructure (10-15 minutes):**
+- Monitor progress in GitHub Actions tab
+- Infrastructure pipeline will create VPC, EKS cluster, and ALB
+- Check AWS Console to see resources being created
 
-#### 1. Clone Repository
+**🚀 Deploy Application:**
 ```bash
-git clone <repository-url>
-cd DevOps-Final-Project
+# Make any change to app/ directory (or create empty commit)
+git commit --allow-empty -m "Deploy application"
+git push origin main
 ```
 
-#### 2. Configure AWS CLI
-```bash
-aws configure
-# Enter AWS Access Key ID
-# Enter AWS Secret Access Key
-# Region: us-east-1
-# Format: json
-```
+**🎉 Access Your Application:**
+- Get ALB URL from GitHub Actions logs
+- Or run: `kubectl get ingress` (after configuring kubectl locally)
+- Your app will be available at: `http://your-alb-url.amazonaws.com`
 
-#### 3. Configure Terraform Backend (Optional)
-```bash
-cd infra/
-# Edit backend.tf with your S3 bucket and DynamoDB table
-# Or comment out to use local backend
-```
 
-#### 4. Manual Deploy (Alternative to Pipelines)
+## 🔄 CI/CD Pipelines Description
 
-**Infrastructure:**
-```bash
-cd infra/
-terraform init
-terraform plan
-terraform apply
-```
+I've implemented two main pipelines that work together to provide a complete deployment automation:
 
-**Application:**
-```bash
-# Build and push Docker image
-cd app/
-docker build -t your-repo/app:latest .
-docker push your-repo/app:latest
+### Infrastructure Pipeline (`infra.yml`)
 
-# Configure kubectl
-aws eks update-kubeconfig --region us-east-1 --name epam-devops-final-eks
+**Purpose:** Manages all AWS infrastructure using Terraform
 
-# Deploy application
-kubectl apply -f ../k8s/
-```
+**When it runs:**
+- Any changes pushed to the `infra/` directory
+- Changes to the pipeline file itself
 
-## 🚀 CI/CD Pipelines
+**What it does:**
 
-### Infrastructure Pipeline (.github/workflows/infra.yml)
+1. **🔍 Validation Phase:**
+   - Checks Terraform syntax
+   - Validates configuration files
+   - Ensures proper formatting
 
-**Trigger:** Changes in `infra/` or pipeline file
+2. **📋 Planning Phase:**
+   - Generates execution plan
+   - Shows what resources will be created/modified
+   - Estimates costs and changes
 
-**Flow:**
-1. **Setup:** Terraform installation
-2. **Validate:** Syntax validation
-3. **Plan:** Infrastructure planning
-4. **Apply:** Infrastructure deployment
+3. **🚀 Deployment Phase:**
+   - Creates VPC with public/private subnets
+   - Sets up EKS cluster (Kubernetes v1.29)
+   - Configures worker nodes (t3.small instances)
+   - Creates IAM roles and security groups
+   - Sets up Application Load Balancer
 
 **Resources Created:**
-- VPC with public/private subnets
-- EKS Cluster (v1.29)
-- Node Groups (t3.small)  
-- IAM Roles for Load Balancer Controller
-- Security Groups and necessary policies
+- **VPC:** 10.0.0.0/16 with 2 availability zones
+- **EKS Cluster:** Managed Kubernetes with 1-2 worker nodes
+- **Load Balancer:** Internet-facing ALB for external access
+- **Security:** IAM roles, security groups, and policies
 
-### Application Pipeline (.github/workflows/app.yml)
+### Application Pipeline (`app.yml`)
 
-**Trigger:** Changes in `app/`
+**Purpose:** Builds, tests, and deploys the FastAPI application
 
-**Phases:**
+**When it runs:**
+- Any changes pushed to the `app/` directory
+- Manual trigger for redeployments
 
-#### 1. Build & Test
-- Setup Python 3.11
-- Install dependencies
-- Run unit tests with coverage
-- Generate test reports
+**What it does:**
 
-#### 2. Docker Build & Push
-- Build multi-stage Docker image
-- Security scanning
-- Push to Docker Hub registry
-- Image vulnerability assessment
+1. **🧪 Testing Phase:**
+   - Sets up Python 3.11 environment
+   - Installs all dependencies
+   - Runs comprehensive test suite
+   - Generates coverage reports
 
-#### 3. Infrastructure Setup
-- Configure AWS credentials
-- Update kubeconfig
-- Verify cluster connectivity
-- Wait for cluster readiness
+2. **🐳 Build Phase:**
+   - Creates optimized Docker image
+   - Uses multi-stage build for smaller size
+   - Scans for security vulnerabilities
+   - Pushes to DockerHub registry
 
-#### 4. Load Balancer Setup
-- Install Helm
-- Add AWS EKS Charts repository
-- Deploy AWS Load Balancer Controller
-- Configure IAM Service Account
-- Wait for controller readiness
+3. **☸️ Infrastructure Setup:**
+   - Configures AWS credentials
+   - Updates kubectl configuration
+   - Verifies EKS cluster connectivity
 
-#### 5. Application Deployment
-- Apply ConfigMap
-- Deploy application (2 replicas)
-- Create Service (ClusterIP)
-- Configure Ingress (ALB)
-- Rolling update strategy
-- Health checks validation
+4. **⚖️ Load Balancer Setup:**
+   - Installs Helm package manager
+   - Deploys AWS Load Balancer Controller
+   - Configures IAM service accounts
+   - Waits for controller readiness
 
-**Deployment Strategies:**
-- Rolling updates (zero-downtime)
-- Health checks (readiness/liveness probes)
-- Resource limits and requests
-- Horizontal Pod Autoscaling ready
+5. **🚀 Application Deployment:**
+   - Applies configuration (ConfigMap)
+   - Deploys application (2 replicas)
+   - Creates internal service
+   - Configures external ingress
+   - Performs rolling update
+   - Validates health checks
 
-### Monitoring and Observability
+### Pipeline Flow Example
 
-**Health Checks:**
-- Container health checks
-- Kubernetes readiness probes
-- Load balancer health checks
-- Application health endpoints
+Here's what happens when you make a change:
 
-**Logging:**
-- Structured logging with Python logging
-- Container logs via kubectl
-- CloudWatch integration (EKS)
+```
+Developer pushes code
+         ↓
+GitHub detects changes
+         ↓
+    ┌─────────────────┐         ┌─────────────────┐
+    │ Infrastructure  │   OR    │  Application    │
+    │    Pipeline     │         │    Pipeline     │
+    │                 │         │                 │
+    │ 1. Validate     │         │ 1. Test         │
+    │ 2. Plan         │         │ 2. Build        │
+    │ 3. Apply        │         │ 3. Deploy       │
+    └─────────────────┘         └─────────────────┘
+         ↓                               ↓
+    AWS Infrastructure              Kubernetes App
+    (VPC, EKS, ALB)                (Pods, Services)
+         ↓                               ↓
+         └───────────────┬───────────────┘
+                         ↓
+              🎉 Live Application 🎉
+    http://your-alb-url.amazonaws.com
+```
 
 ## 📁 Project Structure
 
+Our project is organized for clarity and maintainability:
+
 ```
-DevOps-Final-Project/
-├── app/                           # Application code
-│   ├── main.py                   # FastAPI entry point
+devops-final-project/
+│
+├── 🐍 app/                        # Python FastAPI Application
+│   ├── main.py                   # Application entry point
 │   ├── Dockerfile                # Multi-stage container build
 │   ├── requirements.txt          # Python dependencies
-│   ├── domain/                   # DDD domain layer
-│   │   ├── entities.py          # Business entities
+│   │
+│   ├── domain/                   # 🏛️ Domain Layer (Business Logic)
+│   │   ├── entities.py          # Core business entities
 │   │   └── repositories.py      # Repository interfaces
-│   ├── application/              # DDD application layer
-│   │   └── use_cases.py         # Use cases
-│   └── infrastructure/           # DDD infrastructure layer
-│       ├── controllers.py       # FastAPI endpoints
-│       └── repositories.py      # Implementations
-├── infra/                        # Infrastructure as Code
-│   ├── main.tf                  # Main resources (VPC, EKS)
-│   ├── variables.tf             # Input variables
-│   ├── outputs.tf               # Outputs (cluster info, etc.)
-│   ├── versions.tf              # Provider versions
-│   ├── backend.tf               # Remote state backend
+│   │
+│   ├── application/              # ⚙️ Application Layer (Use Cases)
+│   │   └── use_cases.py         # Business logic orchestration
+│   │
+│   └── infrastructure/           # 🌐 Infrastructure Layer (External)
+│       ├── controllers.py       # FastAPI REST endpoints
+│       └── repositories.py      # Repository implementations
+│
+├── 🏗️ infra/                      # Infrastructure as Code (Terraform)
+│   ├── main.tf                  # Main AWS resources (VPC, EKS)
+│   ├── variables.tf             # Input variables and configuration
+│   ├── outputs.tf               # Exported values (URLs, IDs)
+│   ├── versions.tf              # Provider version constraints
+│   ├── backend.tf               # Remote state configuration
 │   ├── terraform.tfvars         # Variable values
-│   └── iam-policy.json          # IAM policies
-├── k8s/                          # Kubernetes manifests
-│   ├── deployment.yaml          # Deployment with 2 replicas
-│   ├── service.yaml             # ClusterIP Service
-│   ├── ingress.yaml             # ALB Ingress
+│   └── iam-policy.json          # IAM policy definitions
+│
+├── ☸️ k8s/                        # Kubernetes Manifests
+│   ├── deployment.yaml          # Application deployment (2 replicas)
+│   ├── service.yaml             # Internal service (ClusterIP)
+│   ├── ingress.yaml             # External access (ALB)
 │   └── configmap.yaml           # Configuration variables
-├── .github/workflows/            # CI/CD pipelines
-│   ├── app.yml                  # Application pipeline
-│   └── infra.yml                # Infrastructure pipeline
-├── tests/                        # Unit and integration tests
-└── requirements.txt              # Testing dependencies
+│
+├── 🔄 .github/workflows/          # CI/CD Pipeline Definitions
+│   ├── app.yml                  # Application build & deploy pipeline
+│   └── infra.yml                # Infrastructure deployment pipeline
+│
+├── 🧪 tests/                      # Test Suite
+│   ├── test_domain.py           # Domain layer tests
+│   ├── test_use_cases.py        # Application layer tests
+│   └── test_repositories.py     # Infrastructure layer tests
+│
+├── 📋 requirements.txt            # Testing and development dependencies
+├── 📋 pytest.ini                 # Test configuration
+└── 📖 README.md                  # This documentation
 ```
 
-## 💻 Local Usage
+## 🌐 API Endpoints
 
-### Local Development
+Once deployed, your application provides these endpoints:
 
-#### 1. Environment Setup
-```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r app/requirements.txt
-```
-
-#### 2. Run Application
-```bash
-cd app/
-python main.py
-```
-
-The application will be available at:
-- **API:** http://localhost:8000
-- **Documentation:** http://localhost:8000/docs
-- **ReDoc:** http://localhost:8000/redoc
-
-#### 3. Testing with Docker
-```bash
-# Build locally
-docker build -t local-app ./app
-
-# Run container
-docker run -p 8000:8000 local-app
-```
-
-### Available Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | Welcome message |
-| GET | `/health` | Health check with metadata |
-| GET | `/api/v1/health` | Simple health check |
-| GET | `/api/v1/user/{username}` | User information |
+| Method | Endpoint | Description | Example Response |
+|--------|----------|-------------|------------------|
+| `GET` | `/` | Welcome message | `{"message": "Welcome to FastAPI!"}` |
+| `GET` | `/health` | Detailed health check | `{"status": "healthy", "timestamp": "...", "version": "1.0.0"}` |
+| `GET` | `/api/v1/health` | Simple health check | `{"status": "OK"}` |
+| `GET` | `/api/v1/user/{username}` | User information | `{"username": "john", "message": "Hello john!"}` |
 
 ### Usage Examples
 
 ```bash
-# Health check
-curl http://localhost:8000/health
+# Get application URL (after deployment)
+kubectl get ingress
 
-# Specific user
-curl http://localhost:8000/api/v1/user/sebas
+# Test endpoints
+curl http://your-alb-url.amazonaws.com/health
+curl http://your-alb-url.amazonaws.com/api/v1/user/sebas
 
-# Interactive documentation
-open http://localhost:8000/docs
+# Interactive API documentation
+open http://your-alb-url.amazonaws.com/docs
 ```
-
-## 🧪 Testing
-
-### Run Tests
-
-```bash
-# Install testing dependencies
-pip install -r requirements.txt
-
-# Run all tests
-pytest
-
-# Tests with coverage
-pytest --cov=app --cov-report=html --cov-report=term-missing
-
-# Specific tests by layer
-pytest tests/test_domain.py      # Domain layer
-pytest tests/test_use_cases.py   # Use cases
-pytest tests/test_api.py         # API integration tests
-```
-
-### Testing Types
-
-- **Unit Tests:** Entities and domain logic
-- **Integration Tests:** APIs and use cases
-- **Contract Tests:** Repository interfaces
-- **End-to-End Tests:** Complete user flows
-
-## 🎯 DDD Principles
-
-### Layer Separation
-
-1. **Domain Layer:** 
-   - Immutable entities with `@dataclass(frozen=True)`
-   - Pure business logic
-   - Repository interfaces
-
-2. **Application Layer:**
-   - Use case orchestration
-   - Coordination between domain and infrastructure
-   - Transactions and error handling
-
-3. **Infrastructure Layer:**
-   - Repository implementations
-   - HTTP controllers (FastAPI)
-   - External integrations
-
-### Applied Principles
-
-- **Dependency Inversion:** Higher layers depend on abstractions
-- **Clean Architecture:** Dependency flow towards domain
-- **Immutability:** Immutable entities for thread-safety
-- **Repository Pattern:** Persistence abstraction
-- **Use Cases:** Business logic orchestration
-
----
-
-## 🚀 Getting Started Quick
-
-1. **Fork this repository**
-2. **Configure GitHub secrets:**
-   - `AWS_ACCESS_KEY_ID`
-   - `AWS_SECRET_ACCESS_KEY` 
-   - `DOCKERHUB_USERNAME`
-   - `DOCKERHUB_TOKEN`
-3. **Push changes to `infra/`** → Deploy infrastructure
-4. **Push changes to `app/`** → Deploy application
-5. **Access application** via ALB endpoint
-
-The project is designed to work out-of-the-box with minimal configuration! 
